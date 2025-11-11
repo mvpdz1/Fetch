@@ -88,7 +88,7 @@ class PriorityListProcessorImpl(private val handlerWrapper: HandlerWrapper,
                             val download = priorityList[index]
                             val isFetchServerRequest = isFetchFileServerUrl(download.url)
                             
-                            // 核心修复：对于非Fetch服务器请求，即使网络检查失败也尝试启动
+                            // 核心修复：对于非Fetch服务器请求，即使网络检查失败也尝试启动 123
                             // 因为网络检查可能不准确，实际下载时网络可能是可用的
                             val shouldTryStart = isFetchServerRequest || isNetworkAvailable
                             
