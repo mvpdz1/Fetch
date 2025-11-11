@@ -78,7 +78,7 @@ class PriorityListProcessorImpl(private val handlerWrapper: HandlerWrapper,
                 } else if (!isNetworkAvailable) {
                     // 网络检查失败，但仍有任务，记录日志但不立即backoff
                     // 允许尝试启动下载，让下载器自己处理网络错误
-                    logger.w("PriorityIterator: network check failed but has ${priorityList.size} pending tasks, will try anyway")
+                    logger.d("PriorityIterator: network check failed but has ${priorityList.size} pending tasks, will try anyway")
                 }
                 
                 if (!shouldBackOff) {
@@ -88,7 +88,7 @@ class PriorityListProcessorImpl(private val handlerWrapper: HandlerWrapper,
                             val download = priorityList[index]
                             val isFetchServerRequest = isFetchFileServerUrl(download.url)
                             
-                            // 核心修复：对于非Fetch服务器请求，即使网络检查失败也尝试启动 123
+                            // 核心修复：对于非Fetch服务器请求，即使网络检查失败也尝试启动
                             // 因为网络检查可能不准确，实际下载时网络可能是可用的
                             val shouldTryStart = isFetchServerRequest || isNetworkAvailable
                             
@@ -119,7 +119,7 @@ class PriorityListProcessorImpl(private val handlerWrapper: HandlerWrapper,
                                             startedAnyDownload = true
                                             logger.d("PriorityIterator: successfully started download ${download.id}")
                                         } else {
-                                            logger.w("PriorityIterator: failed to start download ${download.id}")
+                                            logger.d("PriorityIterator: failed to start download ${download.id}")
                                         }
                                     } else {
                                         logger.d("PriorityIterator: download ${download.id} already in progress or manager doesn't contain it")
