@@ -70,15 +70,10 @@ class PriorityListProcessorImpl(private val handlerWrapper: HandlerWrapper,
             
             if (canAccommodate && canContinueToProcess()) {
                 var shouldBackOff = false
-                // 核心问题修复：即使网络检查失败，也应该尝试启动下载（网络检查可能不准确）
                 // 只有在确实没有任务时才backoff
                 if (priorityList.isEmpty()) {
                     shouldBackOff = true
                     logger.d("PriorityIterator: no pending tasks, backing off")
-                } else if (!isNetworkAvailable) {
-                    // 网络检查失败，但仍有任务，记录日志但不立即backoff
-                    // 允许尝试启动下载，让下载器自己处理网络错误
-                    logger.d("PriorityIterator: network check failed but has ${priorityList.size} pending tasks, will try anyway")
                 }
                 
                 if (!shouldBackOff) {
@@ -86,48 +81,26 @@ class PriorityListProcessorImpl(private val handlerWrapper: HandlerWrapper,
                     for (index in 0..priorityList.lastIndex) {
                         if (downloadManager.canAccommodateNewDownload() && canContinueToProcess()) {
                             val download = priorityList[index]
-                            val isFetchServerRequest = isFetchFileServerUrl(download.url)
-                            
-                            // 核心修复：对于非Fetch服务器请求，即使网络检查失败也尝试启动
-                            // 因为网络检查可能不准确，实际下载时网络可能是可用的
-                            val shouldTryStart = isFetchServerRequest || isNetworkAvailable
-                            
-                            if (shouldTryStart && canContinueToProcess()) {
-                                val networkType = when {
-                                    globalNetworkType != NetworkType.GLOBAL_OFF -> globalNetworkType
-                                    download.networkType == NetworkType.GLOBAL_OFF -> NetworkType.ALL
-                                    else -> download.networkType
-                                }
-                                val properNetworkConditions = networkInfoProvider.isOnAllowedNetwork(networkType)
-                                
-                                logger.d("PriorityIterator: download ${download.id}, isFetchServer=$isFetchServerRequest, " +
-                                        "networkType=$networkType, properNetworkConditions=$properNetworkConditions")
-                                
-                                if (!properNetworkConditions && !isFetchServerRequest) {
-                                    listenerCoordinator.mainListener.onWaitingNetwork(download)
-                                    logger.d("PriorityIterator: waiting for proper network conditions for download ${download.id}")
-                                }
-                                
-                                // 核心修复：即使网络条件不完全满足，也尝试启动下载
-                                // 让下载器在实际连接时处理网络错误，而不是在这里阻止
-                                // 如果网络检查失败，仍然尝试启动（网络检查可能不准确）
-                                if (isFetchServerRequest || properNetworkConditions) {
+                            val networkType = when {
+                                globalNetworkType != NetworkType.GLOBAL_OFF -> globalNetworkType
+                                download.networkType == NetworkType.GLOBAL_OFF -> NetworkType.ALL
+                                else -> download.networkType
+                            }
+
+                            // 无视网络条件，直接尝试启动
+                            logger.d("PriorityIterator: attempting start for download ${download.id}, networkType=$networkType")
+
+                            if (!downloadManager.contains(download.id) && canContinueToProcess()) {
+                                if (downloadManager.start(download)) {
+                                    startedAnyDownload = true
                                     shouldBackOff = false
-                                    if (!downloadManager.contains(download.id) && canContinueToProcess()) {
-                                        logger.d("PriorityIterator: attempting to start download ${download.id}")
-                                        if (downloadManager.start(download)) {
-                                            startedAnyDownload = true
-                                            logger.d("PriorityIterator: successfully started download ${download.id}")
-                                        } else {
-                                            logger.d("PriorityIterator: failed to start download ${download.id}")
-                                        }
-                                    } else {
-                                        logger.d("PriorityIterator: download ${download.id} already in progress or manager doesn't contain it")
-                                    }
+                                    logger.d("PriorityIterator: started download ${download.id}")
+                                } else {
+                                    logger.d("PriorityIterator: failed to start download ${download.id}")
                                 }
                             } else {
-                                logger.d("PriorityIterator: skipping download ${download.id}, shouldTryStart=$shouldTryStart")
-                                // 不要break，继续尝试其他任务
+                                shouldBackOff = false
+                                logger.d("PriorityIterator: download ${download.id} already active or manager blocked it")
                             }
                         } else {
                             logger.d("PriorityIterator: cannot accommodate more downloads, breaking loop")
